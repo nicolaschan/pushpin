@@ -302,12 +302,45 @@ static void streamHoldKeepAlive() {
     TEST_ASSERT(i.keepAliveTimeout > 0);
 }
 
+static void nextLinkSetHeader() {
+    HttpResponseData data;
+    data.code = 200;
+    data.reason = "OK";
+    data.headers +=
+        HttpHeader("Grip-Link", "</next>; rel=next; set-header=\"Authorization:Bearer token\"; "
+                                "set-header=\"X-Request-Mode: recovery\"");
+
+    bool ok;
+    QString errorMessage;
+    Instruct i = Instruct::fromResponse(data, &ok, &errorMessage);
+    TEST_ASSERT(ok);
+    TEST_ASSERT_EQ(i.nextLink, QString("/next"));
+    TEST_ASSERT_EQ(i.nextLinkHeaders.count(), 2);
+    TEST_ASSERT_EQ(i.nextLinkHeaders[0].first, CowByteArray("Authorization"));
+    TEST_ASSERT_EQ(i.nextLinkHeaders[0].second, CowByteArray("Bearer token"));
+    TEST_ASSERT_EQ(i.nextLinkHeaders[1].first, CowByteArray("X-Request-Mode"));
+    TEST_ASSERT_EQ(i.nextLinkHeaders[1].second, CowByteArray("recovery"));
+
+    data.headers.clear();
+    data.headers += HttpHeader("Grip-Link", "</next>; rel=next; set-header=invalid");
+    i = Instruct::fromResponse(data, &ok, &errorMessage);
+    TEST_ASSERT(!ok);
+    TEST_ASSERT_EQ(errorMessage, QString("Grip-Link set-header has invalid value"));
+
+    data.headers.clear();
+    data.headers += HttpHeader("Grip-Link", "</next>; rel=next; set-header=\"Bad Name:value\"");
+    i = Instruct::fromResponse(data, &ok, &errorMessage);
+    TEST_ASSERT(!ok);
+    TEST_ASSERT_EQ(errorMessage, QString("Grip-Link set-header has invalid name"));
+}
+
 extern "C" int instruct_test(ffi::TestException *out_ex) {
     TEST_CATCH(noHold());
     TEST_CATCH(responseHold());
     TEST_CATCH(responseHoldChannelParams());
     TEST_CATCH(streamHold());
     TEST_CATCH(streamHoldKeepAlive());
+    TEST_CATCH(nextLinkSetHeader());
 
     return 0;
 }

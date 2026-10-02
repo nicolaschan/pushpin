@@ -1055,7 +1055,7 @@ private:
 
         prepareOutReq(nextUri, true);
 
-        HttpHeaders headers;
+        HttpHeaders headers = instruct.nextLinkHeaders;
         foreach (const Instruct::Channel &c, channels.values()) {
             if (!c.prevId.isNull())
                 headers +=

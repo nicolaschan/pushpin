@@ -67,6 +67,7 @@ public:
     bool serverFailed;
     int serverOutSeq;
     QByteArray requestBody;
+    HttpHeaders requestHeaders;
     Connection zhttpClientInValveConnection;
     Connection zhttpClientOutStreamValveConnection;
     Connection zhttpServerInValveConnection;
@@ -156,6 +157,7 @@ public:
         serverFailed = false;
         serverOutSeq = 0;
         requestBody.clear();
+        requestHeaders.clear();
     }
 
     void processClientIn(const CowByteArray &message) {
@@ -220,8 +222,11 @@ public:
             return;
         }
 
-        if (zreq.type == ZhttpRequestPacket::Data)
+        if (zreq.type == ZhttpRequestPacket::Data) {
             requestBody += zreq.body.asQByteArray();
+            if (!zreq.headers.isEmpty())
+                requestHeaders = zreq.headers;
+        }
 
         if (zreq.more) {
             // Ack
@@ -480,8 +485,10 @@ static void acceptNoHoldNext(Wrapper *wrapper, std::function<void(int)> loop_wai
     resp["reason"] = QByteArray("OK");
     VariantList respHeaders;
     respHeaders += Variant(VariantList() << QByteArray("Content-Type") << QByteArray("text/plain"));
-    respHeaders +=
-        Variant(VariantList() << QByteArray("Grip-Link") << QByteArray("</next>; rel=next"));
+    respHeaders += Variant(VariantList()
+                           << QByteArray("Grip-Link")
+                           << QByteArray(
+                                  "</next>; rel=next; set-header=\"Authorization:Bearer token\""));
     resp["headers"] = respHeaders;
     resp["body"] = QByteArray("hello world\n");
 
@@ -509,6 +516,7 @@ static void acceptNoHoldNext(Wrapper *wrapper, std::function<void(int)> loop_wai
     TEST_ASSERT(wrapper->responses.contains(id));
     TEST_ASSERT_EQ(wrapper->responses.value(id).body,
                    QByteArray("hello world\nthis is what's next\n"));
+    TEST_ASSERT_EQ(wrapper->requestHeaders.get("Authorization"), CowByteArray("Bearer token"));
 }
 
 static void acceptNoHoldNextResponseSent(Wrapper *wrapper, std::function<void(int)> loop_wait) {
