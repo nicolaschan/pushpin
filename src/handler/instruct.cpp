@@ -46,6 +46,23 @@ static int charToHex(char c) {
     else
         return -1;
 }
+
+static bool isValidHeaderName(const QByteArray &name) {
+    if (name.isEmpty())
+        return false;
+
+    const QByteArray symbols("!#$%&'*+-.^_`|~");
+    for (char c : name) {
+        if ((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+            symbols.contains(c))
+            continue;
+
+        return false;
+    }
+
+    return true;
+}
+
 static QByteArray unescape(const QByteArray &in) {
     QByteArray out;
 
@@ -242,6 +259,7 @@ Instruct Instruct::fromResponse(const HttpResponseData &response, bool *ok, QStr
     }
 
     QString nextLink;
+    HttpHeaders nextLinkHeaders;
     int nextLinkTimeout = -1;
     QString goneLink;
     foreach (const HttpHeaderParameters &params, response.headers.getAllAsParameters("Grip-Link")) {
@@ -271,6 +289,34 @@ Instruct Instruct::fromResponse(const HttpResponseData &response, bool *ok, QStr
         QByteArray rel = params.get("rel").asQByteArray();
         if (rel == "next") {
             nextLink = linkString;
+            nextLinkHeaders.clear();
+
+            for (int n = 1; n < params.count(); ++n) {
+                const HttpHeaderParameter &param = params[n];
+                if (qstricmp(param.first.data(), "set-header") != 0)
+                    continue;
+
+                QByteArray value = param.second.asQByteArray();
+                int at = value.indexOf(':');
+                if (at < 1) {
+                    setError(ok, errorMessage, "Grip-Link set-header has invalid value");
+                    return Instruct();
+                }
+
+                QByteArray name = value.left(at).trimmed();
+                if (!isValidHeaderName(name)) {
+                    setError(ok, errorMessage, "Grip-Link set-header has invalid name");
+                    return Instruct();
+                }
+
+                QByteArray headerValue = value.mid(at + 1).trimmed();
+                if (headerValue.contains('\r') || headerValue.contains('\n')) {
+                    setError(ok, errorMessage, "Grip-Link set-header has invalid value");
+                    return Instruct();
+                }
+
+                nextLinkHeaders += HttpHeader(name, headerValue);
+            }
 
             if (params.contains("timeout")) {
                 bool x;
@@ -694,6 +740,7 @@ Instruct Instruct::fromResponse(const HttpResponseData &response, bool *ok, QStr
     i.meta = meta;
     i.response = newResponse;
     i.nextLink = nextLink;
+    i.nextLinkHeaders = nextLinkHeaders;
     i.nextLinkTimeout = nextLinkTimeout;
     i.goneLink = goneLink;
 

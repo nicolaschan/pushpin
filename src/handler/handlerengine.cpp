@@ -236,20 +236,18 @@ private:
         result["no-proxy"] = false;
 
         if (autoShare && requestData.method == "GET") {
-            // Auto share matches requests based on URI path (not query) and Grip-Last headers. The
-            // reason the query part is not considered is because it may vary per client and
-            // Grip-Last supersedes whatever is in the query
-
             CowUrl uri = requestData.uri;
             uri.setQuery(QString()); // Remove the query part
 
-            QList<QByteArray> gripLastHeaders =
-                requestData.headers.getAll("Grip-Last").asQByteArrayList();
-            std::sort(gripLastHeaders.begin(), gripLastHeaders.end());
+            QList<QByteArray> keyHeaders;
+            foreach (const HttpHeader &h, requestData.headers) {
+                keyHeaders += h.first.asQByteArray().toLower() + ':' + h.second.asQByteArray();
+            }
+            std::sort(keyHeaders.begin(), keyHeaders.end());
 
             QByteArray key = "auto|" + uri.toEncoded();
 
-            foreach (const QByteArray &h, gripLastHeaders)
+            foreach (const QByteArray &h, keyHeaders)
                 key += '|' + h;
 
             result["sharing-key"] = key;

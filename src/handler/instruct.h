@@ -54,6 +54,7 @@ public:
     QHash<QString, QString> meta;
     HttpResponseData response;
     QString nextLink;
+    HttpHeaders nextLinkHeaders;
     int nextLinkTimeout;
     QString goneLink;
 
